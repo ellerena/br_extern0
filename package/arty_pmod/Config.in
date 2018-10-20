@@ -1,0 +1,5 @@
+config BR2_PACKAGE_ARTY_PMOD
+	bool "arty pmod module - brext0"
+	depends on BR2_LINUX_KERNEL
+	help
+		This is the Arty Pmod Capture Module - BREXT0
