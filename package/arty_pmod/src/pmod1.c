@@ -29,15 +29,15 @@
 #include <linux/of_device.h>
 #include <linux/of_platform.h>
 
-#define DRIVER_NAME     "Arty Lnx Pmod Driver"
+#define DRIVER_NAME     "ArtyLnxPmodDriver"
 #define DEVICE_NAME     "dArtypmod"
 #define CLASS_NAME      "cArtypmod"
 
-static int    maj, min;                     ///< Stores the device number -- determined automatically
-static char   mtxt[256] = {0};              ///< Memory for the string that is passed from userspace
-static short  mlen = 0;                     ///< Used to remember the size of the string stored
-static struct class*  cdClass  = NULL;      ///< The device-driver class struct pointer
-static struct device* cdDevice = NULL;      ///< The device-driver device struct pointer
+static int    maj, min;                     // Stores the device number -- determined automatically
+static char   mtxt[256] = {0};              // Memory for the string that is passed from userspace
+static short  mlen = 0;                     // Used to remember the size of the string stored
+static struct class*  cdClass  = NULL;      // The device-driver class struct pointer
+static struct device* cdDevice = NULL;      // The device-driver device struct pointer
 static struct cdev* cdev = NULL;
 
 static int     cd_probe(struct platform_device *pdev);
@@ -122,7 +122,7 @@ static int cd_probe(struct platform_device *pdev)
     }
 
     devno = MKDEV(maj, min);
-    rc = maj ? register_chrdev_region(devno, 1, DRIVER_NAME) : alloc_chrdev_region(&devno, min, devs, DRIVER_NAME);
+    rc = maj ? register_chrdev_region(devno, 1, DRIVER_NAME) : alloc_chrdev_region(&devno, min, 1, DRIVER_NAME);
     maj = MAJOR(devno);
     dev_info(dev, "allocating cd region %d:%d, result:%d\n", maj, min, rc);
     dev_info(dev, "reg0: x%08x, reg1: x%08x\n", *(unsigned*)(lp->base_addr),*(unsigned*)(lp->base_addr + 4));
