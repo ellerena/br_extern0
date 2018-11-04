@@ -94,11 +94,12 @@ static int    mcom = 0, mdat = 0;
 
 static int cd_probe(struct platform_device *pdev)
 {
+    struct device *dev = &pdev->dev;
     struct resource *r_mem;             /* IO mem resources */
     dev_t devno = 0;
     int rc = 0;
 
-    PRND(dev, DEVICE_NAME ".probe\n");
+    dev_info(dev, DEVICE_NAME ".probe. " __DATE__ " " __TIME__ "\n");
 
     if (!(r_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0)))
     {

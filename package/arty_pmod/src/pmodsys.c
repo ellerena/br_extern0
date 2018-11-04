@@ -65,34 +65,27 @@ static int    mcom = 0;
 static struct kSpace_ *kSpace = NULL;
 static struct kobject *pmod_kobj = NULL;
 
-static ssize_t ctl_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-    volatile u32 *ptemp;
-
-    ptemp = (u32*)kSpace->base_addr;
-    *(u32*)buf = RD_OFF32(PCAP_CTRL_OFFSET);
-    return 4;
-}
-
 static ssize_t dat_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-    unsigned i, temp;
-    u32 *ptemp;
-    ssize_t count = 0;
+    u32 i, temp, *ptemp;
+    ssize_t count;
 
     ptemp = (u32*)kSpace->base_addr;
-
+    temp = RD_OFF32(PCAP_CTRL_OFFSET);
+    *(u32*)buf = temp;
+    buf += 4;
+    count = 4;
     switch(mcom)
     {
         case COM_CAP:
-            temp = RD_OFF32(PCAP_CTRL_OFFSET) - (1 << 16);
+            temp -= (1 << 16);
             WR_OFF32(PCAP_CTRL_OFFSET, temp);
             *(u32*)buf = ~RD_OFF32(PCAP_VAL0_OFFSET);
             *(u32*)(buf + 4) = ~RD_OFF32(PCAP_VAL1_OFFSET);
-            count = 8;
+            count += 8;
             break;
         case COM_DMP:
-            temp = 0xff& (RD_OFF32(PCAP_CTRL_OFFSET) >> 16);
+            temp = 0xff & (temp >> 16);
             for (i = 0; i < temp; i++)
             {
                 WR_OFF32(PCAP_CTRL_OFFSET, (i << 16));
@@ -108,12 +101,11 @@ static ssize_t dat_show(struct kobject *kobj, struct kobj_attribute *attr, char 
     return count;
 }
 
-static ssize_t tsk_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t dat_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
     volatile u32 *ptemp;
 
     ptemp = (u32*)kSpace->base_addr;
-
     mcom = *buf;                                   /* just need 1 byte */
     switch (mcom)
     {
@@ -130,16 +122,15 @@ static ssize_t tsk_store(struct kobject *kobj, struct kobj_attribute *attr, cons
     return count;
 }
 
-static struct kobj_attribute ctl_file = __ATTR_RO(ctl);
-static struct kobj_attribute dat_file = __ATTR_RO(dat);
-static struct kobj_attribute tsk_file = __ATTR_WO(tsk);
+static struct kobj_attribute dat_file = __ATTR_RW(dat);
 
 static int cd_probe(struct platform_device *pdev)
 {
+    struct device *dev = &pdev->dev;
     struct resource *r_mem;             /* IO mem resources */
     int rc = 0;
 
-    PRND(dev, DEVICE_NAME ".probe\n");
+    dev_info(dev, DEVICE_NAME ".probe. " __DATE__ " " __TIME__ "\n");
 
     if (!(r_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0)))
     {
@@ -175,16 +166,7 @@ static int cd_probe(struct platform_device *pdev)
         PRND(dev, "%d\n", __LINE__);
         return -ENOMEM;
     }
-    if(sysfs_create_file(pmod_kobj, &ctl_file.attr))
-    {
-        PRND(dev, "%d\n", __LINE__);
-        kobject_put(pmod_kobj);
-    }
-    if(sysfs_create_file(pmod_kobj, &tsk_file.attr))
-    {
-        PRND(dev, "%d\n", __LINE__);
-        kobject_put(pmod_kobj);
-    }    if(sysfs_create_file(pmod_kobj, &dat_file.attr))
+    if(sysfs_create_file(pmod_kobj, &dat_file.attr))
     {
         PRND(dev, "%d\n", __LINE__);
         kobject_put(pmod_kobj);

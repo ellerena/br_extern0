@@ -5,7 +5,7 @@ obj-m += $(addsuffix .o, $(notdir $(basename $(wildcard $(BR2_EXTERNAL_BREXT0_PA
 GIT_FOLDER = "/home/eddie/git"
 EXTRA_CFLAGS := -I"$(GIT_FOLDER)/vivado/sdk/arty_br_app/src"
 EXTRA_CFLAGS += -I"$(GIT_FOLDER)/vivado/sdk/arty_lnx_pmod_standalone_bsp_nosvc/microblaze_0/include"
-EXTRA_CFLAGS += -DUBLAZE_FW
+EXTRA_CFLAGS += -DUBLAZE_FW -Wno-error=date-time 
 
 ccflags-y := -std=gnu99 -Wno-declaration-after-statement -Wframe-larger-than=1000000000
 
