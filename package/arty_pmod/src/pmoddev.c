@@ -13,23 +13,14 @@
 #include <linux/module.h>         // Core header for loading LKMs into the kernel
 #include <linux/device.h>         // Header to support the kernel Driver Model
 #include <linux/kernel.h>         // Contains types, macros, functions for the kernel
-#include <linux/fs.h>             // Header for the Linux file system support
-#include <linux/uaccess.h>        // Required for the copy to user function
-#include <linux/types.h>
-#include <linux/mod_devicetable.h>
-#include <linux/slab.h>
-#include <linux/gfp.h>
-#include <linux/fs.h>
-#include <linux/errno.h>
-#include <linux/cdev.h>
-#include <linux/io.h>
-#include <linux/interrupt.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
 #include <linux/of_platform.h>
-#include <linux/kobject.h>
+#include <linux/slab.h>
+#include <linux/fs.h>             // Header for the Linux file system support
+#include <linux/cdev.h>
+#include <linux/uaccess.h>        // Required for the copy to user function
+#include <linux/io.h>
 
-#define _GCC_WRAP_STDINT_H      /* don't load stdint.h */
+#define XIL_TYPES_H
 #include "BR_regs.h"
 
 #define PRND(x, ...)       //dev_info(x, ...)
@@ -77,19 +68,16 @@ static struct file_operations fo = {
     .release = cd_release,
 };
 
-struct kSpace_ {
+static struct kSpace_ {
     int irq;
-    unsigned long mem_start;
-    unsigned long mem_end;
+    unsigned long mem_sz;
     void __iomem *base_addr;
-};
+} kSpace;
 
 static int    maj, min;                     // Stores the device number -- determined automatically
-static size_t mlen = 0;                     // Used to remember the size of the string stored
 static struct class*  cdClass  = NULL;      // The device-driver class struct pointer
 static struct device* cdDevice = NULL;      // The device-driver device struct pointer
 static struct cdev* cdev = NULL;
-static struct kSpace_ *kSpace = NULL;
 static int    mcom = 0, mdat = 0;
 
 static int cd_probe(struct platform_device *pdev)
@@ -107,29 +95,12 @@ static int cd_probe(struct platform_device *pdev)
         return -ENODEV;
     }
 
-    if (!(kSpace = (struct kSpace_ *) kmalloc(sizeof(struct kSpace_), GFP_KERNEL)))
+    if (!(kSpace.base_addr = devm_ioremap_resource(dev, r_mem)))
     {
         PRND(dev, "%d\n", __LINE__);
-        return -ENOMEM;
+        return -EIO;
     }
-
-    kSpace->mem_start = r_mem->start;
-    kSpace->mem_end = r_mem->end;
-
-    if (!request_mem_region(kSpace->mem_start, kSpace->mem_end - kSpace->mem_start + 1, DRIVER_NAME))
-    {
-        PRND(dev, "%d\n", __LINE__);
-        rc = -EBUSY;
-        goto error1;
-    }
-
-    if (!(kSpace->base_addr = ioremap(kSpace->mem_start, kSpace->mem_end - kSpace->mem_start + 1)))
-    {
-        PRND(dev, "%d\n", __LINE__);
-        rc = -EIO;
-        goto error2;
-    }
-    PRND(dev, "K Base Address: x%08x\n", *(unsigned*)(kSpace->base_addr));
+    kSpace.mem_sz = r_mem->end - r_mem->start + 1;
 
     if(maj)                 /* allocate or register character device */
     {
@@ -152,7 +123,7 @@ static int cd_probe(struct platform_device *pdev)
     cdev->ops = &fo;
     cdev->owner = THIS_MODULE;
     rc = cdev_add(cdev, devno, 1);
-    PRND(dev, ".probe completion code %d [%08x]\n", rc, (unsigned)kSpace->base_addr);
+    PRND(dev, ".probe completion code %d [%08x]\n", rc, (unsigned)kSpace.base_addr);
 
     return rc;
 
@@ -161,11 +132,7 @@ error5:
 error4:
     unregister_chrdev(maj, DEVICE_NAME);
 //error3:
-    //free_irq(kSpace->irq, kSpace);
-error2:
-    release_mem_region(kSpace->mem_start, kSpace->mem_end - kSpace->mem_start + 1);
-error1:
-    kfree(kSpace);
+    //free_irq(kSpace.irq, kSpace);
     return rc;
 }
 
@@ -180,11 +147,7 @@ static int cd_remove(struct platform_device *pdev)
     //class_unregister(cdClass);
     class_destroy(cdClass);
     unregister_chrdev_region(devno, 1);
-    //dev_info(dev, "free irq.");
-    //free_irq(kSpace->irq, kSpace);
-    release_mem_region(kSpace->mem_start, kSpace->mem_end - kSpace->mem_start + 1);
-    kfree(kSpace);
-    kSpace = NULL;
+    //free_irq(kSpace.irq, kSpace);
     maj = 0;
     return 0;
 }
@@ -195,56 +158,30 @@ static int cd_open(struct inode *inodep, struct file *filep)
     return 0;
 }
 
-static ssize_t cd_write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
-{
-    volatile u32 *ptemp;
-
-    ptemp = (u32*)kSpace->base_addr;
-
-    mlen = copy_from_user((void*)&mcom, buffer, 1);     /* just need 1 byte */
-    if(!mlen)                                           /* read Ok */
-    {
-        switch (mcom)
-        {
-            case COM_RST:
-                WR_OFF32(PCAP_CTRL_OFFSET, 1);     // reset counter
-                WR_OFF32(PCAP_CTRL_OFFSET, 0);
-                break;
-
-            case COM_CAP:
-                WR_OFF32(PCAP_CTRL_OFFSET, 2);     // trigger capture 0
-                WR_OFF32(PCAP_CTRL_OFFSET, 0);     // disable trigger 0
-                break;
-        }
-        mlen = len;
-    }
-    else
-    {
-        mlen = 0;
-    }
-    PRNK(DEVICE_NAME ".Write mcom:%d pmod:x%08x\n", mcom, RD_OFF32(PCAP_CTRL_OFFSET));
-    return mlen;
-}
-
 static ssize_t cd_read(struct file *filep, char *buffer, size_t len, loff_t *offset)
 {
-    unsigned i, temp;
-    volatile u32 *ptemp;
+    u32 i, temp, *ptemp;
+    ssize_t count;
 
-    ptemp = (u32*)kSpace->base_addr;
+    ptemp = (u32*)kSpace.base_addr;
+    mdat = RD_OFF32(PCAP_CTRL_OFFSET);
+    copy_to_user(buffer, (void*)&mdat, 4);
+    buffer += 4;
+    count = 4;
 
     switch(mcom)
     {
         case COM_CAP:
-            temp = RD_OFF32(PCAP_CTRL_OFFSET) - (1 << 16);
+            temp = mdat - (1 << 16);
             WR_OFF32(PCAP_CTRL_OFFSET, temp);
             mdat = ~RD_OFF32(PCAP_VAL0_OFFSET);
             copy_to_user(buffer, (void*)&mdat, 4);
             mdat = ~RD_OFF32(PCAP_VAL1_OFFSET);
             copy_to_user(buffer + 4, (void*)&mdat, 4);
+            count += 8;
             break;
         case COM_DMP:
-            temp = 0xff& (RD_OFF32(PCAP_CTRL_OFFSET) >> 16);
+            temp = 0xff& (mdat >> 16);
             for (i = 0; i < temp; i++)
             {
                 WR_OFF32(PCAP_CTRL_OFFSET, (i << 16));
@@ -254,16 +191,32 @@ static ssize_t cd_read(struct file *filep, char *buffer, size_t len, loff_t *off
                 mdat = ~RD_OFF32(PCAP_VAL1_OFFSET);
                 copy_to_user(buffer, (void*)&mdat, 4);
                 buffer += 4;
+                count += 8;
             }
-            break;
-        case COM_K:
-        case COM_RST:
-            mdat = RD_OFF32(PCAP_CTRL_OFFSET);
-            copy_to_user(buffer, (void*)&mdat, 4);
             break;
     }
 
-    PRNK(DEVICE_NAME ".Read mcom:%d pmod:x%08x len:%d\n", mcom, RD_OFF32(PCAP_CTRL_OFFSET), len);
+    return count;
+}
+
+static ssize_t cd_write(struct file *filep, const char *buffer, size_t len, loff_t *offset)
+{
+    volatile u32 *ptemp;
+
+    ptemp = (u32*)kSpace.base_addr;
+    copy_from_user((void*)&mcom, buffer, 1);     /* just need 1 byte */
+    switch (mcom)
+    {
+        case COM_RST:
+            WR_OFF32(PCAP_CTRL_OFFSET, 1);     // reset counter
+            WR_OFF32(PCAP_CTRL_OFFSET, 0);
+            break;
+        case COM_CAP:
+            WR_OFF32(PCAP_CTRL_OFFSET, 2);     // trigger capture 0
+            WR_OFF32(PCAP_CTRL_OFFSET, 0);     // disable trigger 0
+            break;
+    }
+
     return len;
 }
 
@@ -282,6 +235,7 @@ static void exit_drv(void)
 {
     platform_driver_unregister(&plat_driver);
 }
+
 
 module_init(init_drv);
 module_exit(exit_drv);

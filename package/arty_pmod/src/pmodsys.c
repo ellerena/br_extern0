@@ -18,7 +18,7 @@
 #include <linux/slab.h>
 #include <linux/io.h>
 
-#define _GCC_WRAP_STDINT_H      /* don't load stdint.h */
+#define XIL_TYPES_H
 #include "BR_regs.h"
 
 #define PRND(x, ...)       //dev_info(x, ...)
@@ -54,15 +54,13 @@ static struct platform_driver plat_driver = {
                 .owner = THIS_MODULE,},
 };
 
-struct kSpace_ {
+static struct kSpace_ {
     int irq;
-    unsigned long mem_start;
-    unsigned long mem_end;
+    unsigned long mem_sz;
     void __iomem *base_addr;
-};
+} kSpace;
 
 static int    mcom = 0;
-static struct kSpace_ *kSpace = NULL;
 static struct kobject *pmod_kobj = NULL;
 
 static ssize_t dat_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
@@ -70,7 +68,7 @@ static ssize_t dat_show(struct kobject *kobj, struct kobj_attribute *attr, char 
     u32 i, temp, *ptemp;
     ssize_t count;
 
-    ptemp = (u32*)kSpace->base_addr;
+    ptemp = (u32*)kSpace.base_addr;
     temp = RD_OFF32(PCAP_CTRL_OFFSET);
     *(u32*)buf = temp;
     buf += 4;
@@ -105,7 +103,7 @@ static ssize_t dat_store(struct kobject *kobj, struct kobj_attribute *attr, cons
 {
     volatile u32 *ptemp;
 
-    ptemp = (u32*)kSpace->base_addr;
+    ptemp = (u32*)kSpace.base_addr;
     mcom = *buf;                                   /* just need 1 byte */
     switch (mcom)
     {
@@ -121,7 +119,6 @@ static ssize_t dat_store(struct kobject *kobj, struct kobj_attribute *attr, cons
 
     return count;
 }
-
 static struct kobj_attribute dat_file = __ATTR_RW(dat);
 
 static int cd_probe(struct platform_device *pdev)
@@ -138,28 +135,12 @@ static int cd_probe(struct platform_device *pdev)
         return -ENODEV;
     }
 
-    if (!(kSpace = (struct kSpace_ *) kmalloc(sizeof(struct kSpace_), GFP_KERNEL)))
+    if (!(kSpace.base_addr = devm_ioremap_resource(dev, r_mem)))
     {
         PRND(dev, "%d\n", __LINE__);
-        return -ENOMEM;
+        return -EIO;
     }
-
-    kSpace->mem_start = r_mem->start;
-    kSpace->mem_end = r_mem->end;
-
-    if (!request_mem_region(kSpace->mem_start, kSpace->mem_end - kSpace->mem_start + 1, DRIVER_NAME))
-    {
-        PRND(dev, "%d\n", __LINE__);
-        rc = -EBUSY;
-        goto error1;
-    }
-
-    if (!(kSpace->base_addr = ioremap(kSpace->mem_start, kSpace->mem_end - kSpace->mem_start + 1)))
-    {
-        PRND(dev, "%d\n", __LINE__);
-        rc = -EIO;
-        goto error2;
-    }
+    kSpace.mem_sz = r_mem->end - r_mem->start + 1;
 
     if(!(pmod_kobj = kobject_create_and_add(DEVICE_NAME, kernel_kobj->parent)))
     {
@@ -173,20 +154,11 @@ static int cd_probe(struct platform_device *pdev)
     }
 
     return rc;
-
-error2:
-    release_mem_region(kSpace->mem_start, kSpace->mem_end - kSpace->mem_start + 1);
-error1:
-    kfree(kSpace);
-    return rc;
 }
 
 static int cd_remove(struct platform_device *pdev)
 {
     kobject_put(pmod_kobj);
-    release_mem_region(kSpace->mem_start, kSpace->mem_end - kSpace->mem_start + 1);
-    kfree(kSpace);
-    kSpace = NULL;
     return 0;
 }
 
