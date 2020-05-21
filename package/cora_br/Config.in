@@ -1,0 +1,5 @@
+config BR2_PACKAGE_CORA_BR
+	bool "cora z7 info module - brext1"
+	depends on BR2_LINUX_KERNEL
+	help
+		This is the Cora-z7 Info Module - BREXT1

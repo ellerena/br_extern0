@@ -1,0 +1,7 @@
+//arch = zynq; split = false; format = BIN
+the_ROM_image:
+{
+	[bootloader]/home/eddie/git/vivado/sdk/cora_br_fsbl/Debug/cora_br_fsbl.elf
+	/home/eddie/git/vivado/sdk/cora_br_wrapper_hw_platform_0_nosvc/cora_br_wrapper.bit
+	/home/eddie/git/buildroot/output/images/u-boot.elf
+}
