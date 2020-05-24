@@ -19,12 +19,14 @@
 #include <linux/io.h>
 
 #define XIL_TYPES_H
+typedef char char8;
 #include "BR_regs.h"
+#include "InfoModule.h"
 
 #define PRND(x, ...)       //dev_info(x, ...)
 #define PRNK(x, ...)       //printk(x, ...)
 
-#define DRIVER_NAME     "ArtyLnxPmodSys"
+#define DRIVER_NAME     "ArtyLnxInfoSys"
 #define DEVICE_NAME     "pmod"
 
 #define COM_RST         (0)
@@ -37,7 +39,7 @@ static int     cd_remove(struct platform_device *pdev);
 
 #ifdef CONFIG_OF
 static const struct of_device_id drv_of_match[] = {
-    { .compatible = "xlnx,pmodCapturer-1.0", },
+    { .compatible = "xlnx,InfoModule-1.0", },
     { /* end of list */ },
 };
 
@@ -69,27 +71,28 @@ static ssize_t dat_show(struct kobject *kobj, struct kobj_attribute *attr, char 
     ssize_t count;
 
     ptemp = (u32*)kSpace.base_addr;
-    temp = RD_OFF32(PCAP_CTRL_OFFSET);
+    temp = RD_OFF32(INFO_DATE_OFFSET);
     *(u32*)buf = temp;
     buf += 4;
     count = 4;
     switch(mcom)
     {
+        case COM_RST:
         case COM_CAP:
             temp -= (1 << 16);
-            WR_OFF32(PCAP_CTRL_OFFSET, temp);
-            *(u32*)buf = ~RD_OFF32(PCAP_VAL0_OFFSET);
-            *(u32*)(buf + 4) = ~RD_OFF32(PCAP_VAL1_OFFSET);
+            WR_OFF32(INFO_DATE_OFFSET, temp);
+            *(u32*)buf = ~RD_OFF32(INFO_DATE_OFFSET);
+            *(u32*)(buf + 4) = ~RD_OFF32(INFO_DATE_OFFSET);
             count += 8;
             break;
         case COM_DMP:
             temp = 0xff & (temp >> 16);
             for (i = 0; i < temp; i++)
             {
-                WR_OFF32(PCAP_CTRL_OFFSET, (i << 16));
-                *(u32*)buf = ~RD_OFF32(PCAP_VAL0_OFFSET);
+                WR_OFF32(INFO_DATE_OFFSET, (i << 16));
+                *(u32*)buf = ~RD_OFF32(INFO_DATE_OFFSET);
                 buf += 4;
-                *(u32*)buf = ~RD_OFF32(PCAP_VAL1_OFFSET);
+                *(u32*)buf = ~RD_OFF32(INFO_DATE_OFFSET);
                 buf += 4;
                 count += 8;
             }
@@ -108,12 +111,12 @@ static ssize_t dat_store(struct kobject *kobj, struct kobj_attribute *attr, cons
     switch (mcom)
     {
         case COM_RST:
-            WR_OFF32(PCAP_CTRL_OFFSET, 1);     // reset counter
-            WR_OFF32(PCAP_CTRL_OFFSET, 0);
+            WR_OFF32(INFO_DATE_OFFSET, 1);     // reset counter
+            WR_OFF32(INFO_DATE_OFFSET, 0);
             break;
         case COM_CAP:
-            WR_OFF32(PCAP_CTRL_OFFSET, 2);     // trigger capture 0
-            WR_OFF32(PCAP_CTRL_OFFSET, 0);     // disable trigger 0
+            WR_OFF32(INFO_DATE_OFFSET, 2);     // trigger capture 0
+            WR_OFF32(INFO_DATE_OFFSET, 0);     // disable trigger 0
             break;
     }
 

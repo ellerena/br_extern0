@@ -21,12 +21,14 @@
 #include <linux/io.h>
 
 #define XIL_TYPES_H
+typedef char char8;
 #include "BR_regs.h"
+#include "InfoModule.h"
 
 #define PRND(x, ...)       //dev_info(x, ...)
 #define PRNK(x, ...)       //printk(x, ...)
 
-#define DRIVER_NAME     "ArtyLnxPmodDevice"
+#define DRIVER_NAME     "ArtyLnxInfoDevice"
 #define DEVICE_NAME     "dpmod"
 #define CLASS_NAME      "cpmod"
 
@@ -164,7 +166,7 @@ static ssize_t cd_read(struct file *filep, char *buffer, size_t len, loff_t *off
     ssize_t count;
 
     ptemp = (u32*)kSpace.base_addr;
-    mdat = RD_OFF32(PCAP_CTRL_OFFSET);
+    mdat = RD_OFF32(INFO_DATE_OFFSET);
     copy_to_user(buffer, (void*)&mdat, 4);
     buffer += 4;
     count = 4;
@@ -173,10 +175,10 @@ static ssize_t cd_read(struct file *filep, char *buffer, size_t len, loff_t *off
     {
         case COM_CAP:
             temp = mdat - (1 << 16);
-            WR_OFF32(PCAP_CTRL_OFFSET, temp);
-            mdat = ~RD_OFF32(PCAP_VAL0_OFFSET);
+            WR_OFF32(INFO_DATE_OFFSET, temp);
+            mdat = ~RD_OFF32(INFO_DATE_OFFSET);
             copy_to_user(buffer, (void*)&mdat, 4);
-            mdat = ~RD_OFF32(PCAP_VAL1_OFFSET);
+            mdat = ~RD_OFF32(INFO_DATE_OFFSET);
             copy_to_user(buffer + 4, (void*)&mdat, 4);
             count += 8;
             break;
@@ -184,11 +186,11 @@ static ssize_t cd_read(struct file *filep, char *buffer, size_t len, loff_t *off
             temp = 0xff& (mdat >> 16);
             for (i = 0; i < temp; i++)
             {
-                WR_OFF32(PCAP_CTRL_OFFSET, (i << 16));
-                mdat = ~RD_OFF32(PCAP_VAL0_OFFSET);
+                WR_OFF32(INFO_DATE_OFFSET, (i << 16));
+                mdat = ~RD_OFF32(INFO_DATE_OFFSET);
                 copy_to_user(buffer, (void*)&mdat, 4);
                 buffer += 4;
-                mdat = ~RD_OFF32(PCAP_VAL1_OFFSET);
+                mdat = ~RD_OFF32(INFO_DATE_OFFSET);
                 copy_to_user(buffer, (void*)&mdat, 4);
                 buffer += 4;
                 count += 8;
@@ -208,12 +210,12 @@ static ssize_t cd_write(struct file *filep, const char *buffer, size_t len, loff
     switch (mcom)
     {
         case COM_RST:
-            WR_OFF32(PCAP_CTRL_OFFSET, 1);     // reset counter
-            WR_OFF32(PCAP_CTRL_OFFSET, 0);
+            WR_OFF32(INFO_DATE_OFFSET, 1);     // reset counter
+            WR_OFF32(INFO_DATE_OFFSET, 0);
             break;
         case COM_CAP:
-            WR_OFF32(PCAP_CTRL_OFFSET, 2);     // trigger capture 0
-            WR_OFF32(PCAP_CTRL_OFFSET, 0);     // disable trigger 0
+            WR_OFF32(INFO_DATE_OFFSET, 2);     // trigger capture 0
+            WR_OFF32(INFO_DATE_OFFSET, 0);     // disable trigger 0
             break;
     }
 
