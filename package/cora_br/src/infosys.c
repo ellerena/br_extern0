@@ -85,6 +85,10 @@ static ssize_t dat_show(struct kobject *kobj, struct kobj_attribute *attr, char 
           break;
 
        case COM_RST:	/*0*/
+          sprintf(buf, __DATE__ " " __TIME__);
+          count = strlen(buf);
+          break;
+
        case COM_DMP:	/*3*/
           sprintf(buf, "Paris et Libere");
           break;
